@@ -58,11 +58,30 @@ jobs:
       - name: Install GitHub CLI
         run: sudo apt-get update && sudo apt-get install -y gh jq
 
+      - name: Select authentication token
+        env:
+          PASSED_TOKEN: ${{ secrets.token }}
+          FALLBACK_TOKEN: ${{ github.token }}
+        run: |
+          if [[ -n "$PASSED_TOKEN" ]]; then
+            echo "Using caller-provided token from workflow_call secret 'token'."
+            echo "::add-mask::$PASSED_TOKEN"
+            echo "GH_TOKEN=$PASSED_TOKEN" >> "$GITHUB_ENV"
+            echo "GH_TOKEN_SOURCE=workflow_call secret 'token'" >> "$GITHUB_ENV"
+          elif [[ -n "$FALLBACK_TOKEN" ]]; then
+            echo "No workflow_call secret 'token' was provided. Falling back to github.token for this workflow run."
+            echo "::add-mask::$FALLBACK_TOKEN"
+            echo "GH_TOKEN=$FALLBACK_TOKEN" >> "$GITHUB_ENV"
+            echo "GH_TOKEN_SOURCE=github.token" >> "$GITHUB_ENV"
+          else
+            echo "Neither workflow_call secret 'token' nor github.token is available." >&2
+            exit 1
+          fi
+
       - name: Cleanup old documentation
         working-directory: gh-pages-cleanup
-        env:
-          GH_TOKEN: ${{ secrets.token }}
         run: |
+          echo "Authenticating GitHub CLI using: $GH_TOKEN_SOURCE"
           gh auth status
 
           ACTIVE_BRANCHES=$(gh api --paginate repos/${{ github.repository }}/branches --jq '.[].name')
