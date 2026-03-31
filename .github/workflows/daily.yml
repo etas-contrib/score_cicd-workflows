@@ -86,3 +86,5 @@ jobs:
       id-token: write
     secrets:
       token: ${{ github.token }}
+    with:
+      token2: ${{ github.token }}

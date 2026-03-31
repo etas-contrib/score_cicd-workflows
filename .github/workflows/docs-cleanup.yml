@@ -26,6 +26,10 @@ on:
         type: string
         required: false
         default: "workflow"
+      token2:
+        description: "just for testing"
+        type: string
+        required: false
     secrets:
       token:
         description: "GitHub Token"
@@ -61,8 +65,13 @@ jobs:
       - name: Select authentication token
         env:
           PASSED_TOKEN: ${{ secrets.token }}
+          PASSED_TOKEN2: ${{ inputs.token2 }}
           FALLBACK_TOKEN: ${{ github.token }}
         run: |
+          [[ -n "$PASSED_TOKEN" ]] && echo "secret.token is set."
+          [[ -n "$PASSED_TOKEN2" ]] && echo "Input token2 is set."
+          [[ -n "$FALLBACK_TOKEN" ]] && echo "github.token is set."
+
           if [[ -n "$PASSED_TOKEN" ]]; then
             echo "Using caller-provided token from workflow_call secret 'token'."
             echo "::add-mask::$PASSED_TOKEN"
