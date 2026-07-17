@@ -119,12 +119,27 @@ jobs:
             return 0
           }
 
+          # Returns success if any of the given files contains the pattern.
+          file_contains() {
+            local pattern="$1"
+            shift
+            local path
+            for path in "$@"; do
+              if [[ -f "$path" ]] && grep -q -- "$pattern" "$path"; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
           emit_output has_bazel any_file_exists \
             "MODULE.bazel" \
             "WORKSPACE" \
             "WORKSPACE.bazel"
           emit_output has_bazel_lock any_file_exists \
             "MODULE.bazel.lock"
+          emit_output has_bazel_devcontainer file_contains "score_devcontainer" \
+            "MODULE.bazel"
           emit_output has_devcontainer any_file_exists \
             ".devcontainer/devcontainer.json" \
             "devcontainer.json"
@@ -140,6 +155,9 @@ jobs:
 
       - name: 🧹 Run pre-commit checks
         if: ${{ !cancelled() && steps.detect.outputs.has_precommit == 'true' && !inputs.skip-pre-commit }}
+        env:
+          HAS_DEVCONTAINER: ${{ steps.detect.outputs.has_devcontainer }}
+          HAS_BAZEL_DEVCONTAINER: ${{ steps.detect.outputs.has_bazel_devcontainer }}
         run: |
           if ! uvx pre-commit run --all-files; then
             {
@@ -147,13 +165,29 @@ jobs:
               echo ''
               echo 'One or more pre-commit hooks reported problems (formatting, linting, etc.).'
               echo ''
-              echo '**Reproduce locally**'
+              echo '**Run it locally** — pick whichever matches how you work:'
+              echo ''
+              echo 'Directly via uv (this is what CI runs):'
               echo '```bash'
               echo 'uvx pre-commit run --all-files'
               echo '```'
+              if [ "$HAS_DEVCONTAINER" = "true" ]; then
+                echo ''
+                echo 'Inside the devcontainer (`pre-commit` is already on the PATH):'
+                echo '```bash'
+                echo 'pre-commit run --all-files'
+                echo '```'
+              fi
+              if [ "$HAS_BAZEL_DEVCONTAINER" = "true" ]; then
+                echo ''
+                echo 'Via Bazel, using the toolchain from `score_devcontainer`:'
+                echo '```bash'
+                echo 'bazel run @score_devcontainer//tools:uvx -- pre-commit run --all-files'
+                echo '```'
+              fi
               echo ''
               echo '**Fix**'
-              echo 'Most hooks auto-fix. Re-run the command above, review the changes it made, then commit them.'
+              echo 'Most hooks auto-fix. Re-run your chosen command, review the changes it made, then commit them.'
               echo 'Run `uvx pre-commit install` once to catch this before pushing.'
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
@@ -161,6 +195,8 @@ jobs:
 
       - name: 🐍 Run Python tests with uv
         if: ${{ !cancelled() && steps.detect.outputs.has_python_uv == 'true' && !inputs.skip-python-tests }}
+        env:
+          HAS_BAZEL_DEVCONTAINER: ${{ steps.detect.outputs.has_bazel_devcontainer }}
         run: |
           if ! uv run --frozen python -m pytest; then
             {
@@ -168,10 +204,19 @@ jobs:
               echo ''
               echo 'Tests failed, or `uv.lock` is out of date (`--frozen` forbids updating it during the run).'
               echo ''
-              echo '**Reproduce locally**'
+              echo '**Run it locally** — pick whichever matches how you work:'
+              echo ''
+              echo 'Directly via uv (this is what CI runs; identical inside the devcontainer):'
               echo '```bash'
               echo 'uv run --frozen python -m pytest'
               echo '```'
+              if [ "$HAS_BAZEL_DEVCONTAINER" = "true" ]; then
+                echo ''
+                echo 'Via Bazel, using the toolchain from `score_devcontainer`:'
+                echo '```bash'
+                echo 'bazel run @score_devcontainer//tools:uv -- run --frozen python -m pytest'
+                echo '```'
+              fi
               echo ''
               echo '**Fix**'
               echo 'Fix the failing tests. If the failure is about the lockfile, run `uv lock` and commit the updated `uv.lock`.'
@@ -266,7 +311,7 @@ jobs:
               echo '**Fix**'
               echo 'Auto-format the sources, then commit:'
               echo '```bash'
-              echo 'bazel run //:format'
+              echo 'bazel run //:format.fix'
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
@@ -340,7 +385,7 @@ jobs:
               echo '```'
               echo ''
               echo '**Fix**'
-              echo 'Regenerate the lockfile with `bazel mod tidy` and commit the updated `MODULE.bazel.lock`.'
+              echo 'Regenerate the lockfile with `bazel mod deps` and commit the updated `MODULE.bazel.lock`.'
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi

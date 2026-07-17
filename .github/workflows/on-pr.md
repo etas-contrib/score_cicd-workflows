@@ -88,8 +88,11 @@ jobs:
   after it — each reports its own pass/fail, and the job as a whole fails if any
   check failed.
 - **Failures come with guidance.** When a check fails it writes a block to the
-  run's **Summary** page explaining what failed, how to reproduce it locally, and
-  how to fix it — so a red check is actionable without digging through logs.
+  run's **Summary** page explaining what failed, how to run it locally, and how to
+  fix it — so a red check is actionable without digging through logs. For checks
+  that have more than one local invocation path (pre-commit, Python tests) it
+  lists the uv, devcontainer, and Bazel variants that apply to your repo, so it
+  never prescribes a single toolchain.
 - **Sequential.** Checks run one after another in a single runner rather than in
   parallel across jobs. This trades a little wall-clock time for far less runner
   spin-up overhead and no skipped-job clutter in the PR checks UI.
